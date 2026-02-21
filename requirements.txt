@@ -1,0 +1,8 @@
+pandas
+requests
+fastapi
+uvicorn[standard]
+chromadb
+ollama
+pyarrow
+fastparquet
