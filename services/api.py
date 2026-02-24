@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 from typing import Optional
-from service import query_collections
-from prompts import get_user_prompt, get_lawyer_prompt
+from services.service import query_collections
+from prompts.prompts import get_user_prompt, get_lawyer_prompt
 import ollama
 
 router = APIRouter()
