@@ -6,3 +6,5 @@ chromadb
 ollama
 pyarrow
 fastparquet
+build>=1.0.0
+google-genai>=1.0.0
