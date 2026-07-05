@@ -14,6 +14,12 @@ Authorization: Bearer <access_token>
 
 Tokens expire after `JWT_EXPIRE_MINUTES` (server-configured, currently 1440 = 24h). Calling `POST /auth/logout` invalidates the token immediately server-side (it doesn't just expire on its own) — the FE should discard the stored token on logout regardless, but a revoked token will get `401` if reused (e.g. from another open tab).
 
+**Rate limiting:** `POST /auth/register`, `POST /auth/login`, `POST /auth/forgot-password`, and `POST /auth/reset-password` are each capped at **4 requests per client IP per 15 minutes**, tracked independently per endpoint. Exceeding it returns:
+```json
+{ "detail": "Too many attempts. Try again in up to 15 minutes." }
+```
+with status `429`. The FE should surface this distinctly from a normal `401`/`422` (e.g. "too many attempts, please wait" rather than "wrong password").
+
 ### `POST /auth/register`
 
 Create an account and get a token in one call.
@@ -44,6 +50,7 @@ Response `200`:
 Errors:
 - `409` — email already registered
 - `422` — validation error (bad email format, missing field, etc. — standard FastAPI/pydantic shape)
+- `429` — rate limited (see above)
 
 ### `POST /auth/login`
 
@@ -57,6 +64,7 @@ Response `200`: same shape as `/auth/register`.
 Errors:
 - `401` — incorrect email or password
 - `403` — account disabled
+- `429` — rate limited (see above)
 
 ### `GET /auth/me`
 
@@ -96,6 +104,8 @@ Response `200` (always this shape, whether or not the email is registered — av
 
 The token expires in 30 minutes and is single-use.
 
+Errors: `429` — rate limited (see above).
+
 ### `POST /auth/reset-password`
 
 Request body:
@@ -105,7 +115,9 @@ Request body:
 
 Response: `204 No Content`.
 
-Errors: `400` — token invalid, expired, or already used.
+Errors:
+- `400` — token invalid, expired, or already used
+- `429` — rate limited (see above)
 
 ## Chat queries
 

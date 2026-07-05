@@ -13,19 +13,20 @@ from services.models import (
     UserRegister,
 )
 from services.password_reset_service import create_reset_token, reset_password
+from services.rate_limit import rate_limit
 from services.user_service import authenticate_user, create_user, to_user_out
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=Token)
+@router.post("/register", response_model=Token, dependencies=[Depends(rate_limit("register"))])
 def register(request: UserRegister) -> Dict[str, Any]:
     user = create_user(request)
     token = create_access_token(str(user["_id"]))
     return {"access_token": token, "user": to_user_out(user)}
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=Token, dependencies=[Depends(rate_limit("login"))])
 def login(request: UserLogin) -> Dict[str, Any]:
     user = authenticate_user(request.email, request.password)
     token = create_access_token(str(user["_id"]))
@@ -42,7 +43,7 @@ def logout(payload: Dict[str, Any] = Depends(get_token_payload)) -> None:
     revoke_token(payload["jti"], payload["exp"])
 
 
-@router.post("/forgot-password")
+@router.post("/forgot-password", dependencies=[Depends(rate_limit("forgot-password"))])
 def forgot_password(request: ForgotPasswordRequest) -> Dict[str, Any]:
     token = create_reset_token(request.email)
     # Always return the same shape/message regardless of whether the email
@@ -55,6 +56,10 @@ def forgot_password(request: ForgotPasswordRequest) -> Dict[str, Any]:
     }
 
 
-@router.post("/reset-password", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/reset-password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(rate_limit("reset-password"))],
+)
 def do_reset_password(request: ResetPasswordRequest) -> None:
     reset_password(request.token, request.new_password)

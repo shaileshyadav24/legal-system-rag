@@ -29,6 +29,7 @@ chat_messages_collection = db["chat_messages"]
 documents_collection = db["case_law_documents"]
 revoked_tokens_collection = db["revoked_tokens"]
 password_reset_tokens_collection = db["password_reset_tokens"]
+rate_limit_attempts_collection = db["rate_limit_attempts"]
 
 # Name of the Atlas Search vector index on documents_collection.embedding.
 # Must match the index used in services/retrieval.py's $vectorSearch stage.
@@ -51,6 +52,10 @@ def ensure_indexes() -> None:
     revoked_tokens_collection.create_index("expires_at", expireAfterSeconds=0)
     password_reset_tokens_collection.create_index("token_hash", unique=True)
     password_reset_tokens_collection.create_index("expires_at", expireAfterSeconds=0)
+    rate_limit_attempts_collection.create_index([("identifier", ASCENDING), ("endpoint", ASCENDING)])
+    # TTL: each attempt record expires on its own after the rate-limit window,
+    # so the window "resets" naturally without any separate cleanup logic.
+    rate_limit_attempts_collection.create_index("expires_at", expireAfterSeconds=0)
 
 
 def ensure_vector_search_index() -> None:
