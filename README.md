@@ -1,35 +1,39 @@
 # Nextwork RAG API
 
 ## Overview
-This project is a Retrieval-Augmented Generation (RAG) API for legal document search and question answering. It uses FastAPI, ChromaDB, and Ollama for semantic search and generative responses.
+This project is a Retrieval-Augmented Generation (RAG) API for Canadian legal case-law search and question answering. It uses FastAPI, ChromaDB, and Ollama (`tinyllama`) for semantic search and generative responses, with answers tailored to the reader (layperson vs. legal professional).
 
 ## Features
-- Query across multiple legal datasets (SCC, FCA, FC, TCC, CMAC, CHRT, SST, RPD, RAD, RLLR, ONCA)
-- Extract and clean URLs from context
-- Modular service and API structure
-- Role-based prompt templates (user, lawyer)
-- Session-based conversation history for context
-- Chat session management (start, delete)
-- Returns appropriate HTTP responses (200, 204, 404, 500)
+- Query across multiple legal datasets (`SCC, FCA, FC, TCC, CMAC, CHRT, SST, RPD, RAD, RLLR, ONCA`), or target a single collection
+- Role-based prompt templates - plain-language answers for `/query/user`, precise legal analysis for `/query/lawyer` - both grounded to only use the retrieved context
+- Optional conversation history so follow-up questions stay in context (last 5 turns)
+- Extracts source URLs and PDF links from the retrieved context/metadata
+- Returns appropriate HTTP responses (200, 204 no relevant context, 404 unknown collection, 500 model failure)
 - Docker containerization support
+- Automated AI code review posted on pull requests via GitHub Actions (`scripts/ai_review.py`, powered by Gemini)
 
 ## Project Structure
 - `app.py`: FastAPI app entrypoint with CORS middleware
-- `services/api.py`: Query endpoints with role-based logic and prompt templates
-- `services/chat_api.py`: Chat session management endpoints
-- `services/service.py`: Business logic for querying collections and extracting URLs
-- `prompts/prompts.py`: Prompt templates for user and lawyer roles
-- `dataset/dataset.py`: Dataset management utilities
-- `db/`: ChromaDB persistent storage for document collections
-- `user_db/`: ChromaDB persistent storage for user chat sessions
-- `scripts/ai_review.py`: AI review utilities
+- `services/api.py`: `/query/user` and `/query/lawyer` endpoints
+- `services/retrieval.py`: Queries ChromaDB collections and extracts URLs/PDF links from the best-matching chunk
+- `services/history.py`: Builds the conversation-history block injected into prompts
+- `services/llm.py`: Builds the role-specific prompt and calls the Ollama model
+- `services/response_utils.py`: Cleans up raw model output before returning it
+- `services/models.py`: Request/response Pydantic models
+- `services/constants.py`: Dataset collection names
+- `prompts/prompts.py`: Prompt templates for the `user` and `lawyer` roles
+- `dataset/dataset.py`: Downloads the source datasets and populates the ChromaDB collections in `db/`
+- `db/`: ChromaDB persistent storage for document collections (gitignored)
+- `user_db/`: Reserved for user/session data (gitignored)
+- `scripts/ai_review.py`: Gemini-powered script used by the CI PR-review workflow
+- `.github/workflows/`: CI (`ci.yml`) and automated PR review (`pr_review.yml`)
 - `Dockerfile`: Docker container configuration
 - `curl_examples.sh`: Example API calls using curl
 
 ## Prerequisites
 - Python 3.11+
-- Ollama with `tinyllama` model installed
-- ChromaDB for vector storage
+- Ollama with the `tinyllama` model installed
+- ChromaDB (installed via `requirements.txt`) with `db/` populated by `dataset/dataset.py`
 
 ## Installation
 
@@ -37,8 +41,8 @@ This project is a Retrieval-Augmented Generation (RAG) API for legal document se
 1. Clone the repository and navigate to the project directory
 2. Create a virtual environment:
    ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    ```
 3. Install dependencies:
    ```bash
@@ -48,6 +52,10 @@ This project is a Retrieval-Augmented Generation (RAG) API for legal document se
    ```bash
    ollama serve
    ollama pull tinyllama
+   ```
+5. Populate the vector store (one-time, downloads case-law datasets into `db/`):
+   ```bash
+   python dataset/dataset.py
    ```
 
 ### Docker
@@ -68,66 +76,62 @@ uvicorn app:app --port 8000 --host 0.0.0.0
 ```
 
 ### API Endpoints
-
-#### Chat Session Management
-- `GET /chat/start`: Start a new chat session and get a session ID
-- `DELETE /chat/{session_id}`: Delete a chat session
-
-#### Query Endpoints
-- `POST /query/user`: Query for user-friendly answers
-- `POST /query/lawyer`: Query for legal professional answers
-
-### Example Usage
-
-1. Start a chat session:
-   ```bash
-   curl -X GET "http://localhost:8000/chat/start"
-   ```
-   Response: `{"session_id": "uuid-here"}`
-
-2. Query with user role:
-   ```bash
-   curl -X POST "http://localhost:8000/query/user" \
-     -H "Content-Type: application/json" \
-     -d '{"query": "What is the deadline for filing an appeal?", "session_id": "your-session-id"}'
-   ```
-
-3. Query with lawyer role:
-   ```bash
-   curl -X POST "http://localhost:8000/query/lawyer" \
-     -H "Content-Type: application/json" \
-     -d '{"query": "What are the legal requirements for contract formation?", "session_id": "your-session-id"}'
-   ```
+- `POST /query/user`: Query for plain-language, layperson-friendly answers
+- `POST /query/lawyer`: Query for precise legal analysis aimed at legal professionals
 
 ### Request Format
 ```json
 {
-  "query": "Your legal question here",
-  "session_id": "uuid-of-chat-session"
+  "query": "What is the deadline for filing an appeal?",
+  "collection_name": "SCC",
+  "history": [
+    {"q": "Previous question", "answer": "Previous answer"}
+  ]
 }
 ```
+- `query` (required): the question to answer
+- `collection_name` (optional): restrict the search to one dataset (e.g. `SCC`); omit to search across all datasets
+- `history` (optional): prior turns in the conversation, used to keep follow-up questions in context
 
 ### Response Format
 ```json
 {
   "answer": "The AI-generated answer based on retrieved legal documents",
-  "urls": ["https://example.com/legal-reference-1", "https://example.com/legal-reference-2"]
+  "urls": ["https://example.com/legal-reference-1"]
 }
 ```
+
+### Example Usage
+
+Query with the user role:
+```bash
+curl -X POST "http://localhost:8000/query/user" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is the deadline for filing an appeal?"}'
+```
+
+Query with the lawyer role, restricted to one collection:
+```bash
+curl -X POST "http://localhost:8000/query/lawyer" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What are the legal requirements for contract formation?", "collection_name": "SCC"}'
+```
+
+See `curl_examples.sh` for more examples.
 
 ## Development
 
 ### Adding New Datasets
-1. Add dataset name to the `datasets` list in `services/api.py`
-2. Ensure the dataset collection exists in ChromaDB
+1. Add the dataset name to `DATASETS` in `services/constants.py` (and `dataset/dataset.py` if it needs to be downloaded/ingested)
+2. Ensure the corresponding `<name>_docs` collection exists in ChromaDB (run `dataset/dataset.py` to ingest it)
 
 ### Customizing Prompts
-- Modify prompt templates in `prompts/prompts.py`
-- Add new roles by extending the `build_prompt` function
+- Modify the prompt templates in `prompts/prompts.py`
+- Add a new role by writing a new prompt-builder function and registering it in `_PROMPT_BUILDERS` in `services/llm.py`, then adding a matching route in `services/api.py`
 
 ### Extending Business Logic
-- Add new functionality in `services/service.py`
-- Update API endpoints in `services/api.py` or `services/chat_api.py`
+- Add retrieval logic in `services/retrieval.py`
+- Add new API endpoints in `services/api.py`
 
 ## License
 MIT
