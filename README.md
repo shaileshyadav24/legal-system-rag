@@ -1,4 +1,4 @@
-# Nextwork RAG API
+# Legal RAG API
 
 ## Overview
 This project is a Retrieval-Augmented Generation (RAG) API for Canadian legal case-law search and question answering. It uses FastAPI, MongoDB Atlas Vector Search, and Ollama (`tinyllama`) for semantic search and generative responses, with answers tailored to the reader (layperson vs. legal professional).
