@@ -45,58 +45,87 @@ Full request/response reference for every endpoint (including exact schemas and 
 - Ollama with the `tinyllama` model installed
 - A MongoDB **Atlas** cluster with Atlas Search enabled — `$vectorSearch` doesn't work against a plain self-hosted `mongod`. For local development/testing without a real Atlas cluster, the `mongodb/mongodb-atlas-local` Docker image supports `$vectorSearch` too (see `CLAUDE.md` for the exact command).
 
-## Installation
+## Getting Started
 
-### Local Development
-1. Clone the repository and navigate to the project directory
-2. Create a virtual environment:
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   ```
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Copy `.env.example` to `.env` and fill in `MONGODB_URI`, `MONGODB_DB_NAME`, `JWT_SECRET`, and `JWT_EXPIRE_MINUTES` — the app won't start without all four set.
-5. Ensure Ollama is running with the tinyllama model:
-   ```bash
-   ollama serve
-   ollama pull tinyllama
-   ```
-6. Populate the vector store (one-time per dataset refresh; downloads case-law datasets and ingests them into MongoDB):
-   ```bash
-   python dataset/dataset.py
-   ```
+This walks through everything from scratch: standing up a MongoDB cluster, ingesting the dataset, and running the API.
 
-### Docker
-1. Build the Docker image:
-   ```bash
-   docker build -t nextwork-rag-api .
-   ```
-2. Run the container (pass your `.env` through):
-   ```bash
-   docker run -p 8000:8000 --env-file .env nextwork-rag-api
-   ```
+### 1. Get a MongoDB cluster with Atlas Search
 
-## Usage
+`$vectorSearch` (used by `services/retrieval.py`) only works against MongoDB **Atlas** — a plain self-hosted `mongod` can't run it, so this step isn't optional. Pick one:
 
-### Start the API Server
+**Option A — real Atlas cluster (use this if you want the data to persist / for anything beyond local testing):**
+1. Sign up / log in at [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register) and create a Project.
+2. **Build a Database** → choose a tier (the free **M0** tier is enough to develop against) → pick a cloud provider/region → create the cluster (provisioning takes a few minutes).
+3. **Database Access** → *Add New Database User* → set a username/password. These become `<user>`/`<password>` in the connection string.
+4. **Network Access** → *Add IP Address* → add your current IP (or `0.0.0.0/0` to allow access from anywhere, only while developing).
+5. Once the cluster is up, click **Connect** → **Drivers**, and copy the connection string. It looks like:
+   ```
+   mongodb+srv://<user>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority
+   ```
+   You don't need to create the vector search index yourself — `ensure_vector_search_index()` (`services/db.py`) creates it programmatically the first time `dataset/dataset.py` or the app runs.
+
+**Option B — local Docker container (fast, disposable, good for a quick trial run):**
+```bash
+docker run -d -p 27017:27017 mongodb/mongodb-atlas-local
+```
+This image bundles `mongot`, so `$vectorSearch` works against it too, unlike a plain `mongo` image. Its connection string is:
+```
+mongodb://localhost:27017/?directConnection=true
+```
+(`directConnection=true` is required — otherwise the driver tries to resolve the replica set's internal container hostname, which your host can't do.)
+
+### 2. Configure environment variables
+Copy `.env.example` to `.env` and fill in:
+- `MONGODB_URI` — the connection string from step 1
+- `MONGODB_DB_NAME` — any database name, e.g. `legal_rag` (created automatically on first write)
+- `JWT_SECRET` — any long random string (e.g. `python -c "import secrets; print(secrets.token_hex(32))"`)
+- `JWT_EXPIRE_MINUTES` — how long access tokens stay valid, e.g. `1440` (24h)
+
+All four are required — the app fails fast at startup if any are missing (`services/config.py`).
+
+### 3. Install dependencies
+```bash
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+### 4. Start Ollama
+```bash
+ollama serve
+ollama pull tinyllama
+```
+
+### 5. Ingest the dataset
+```bash
+python dataset/dataset.py
+```
+This downloads each case-law dataset, embeds every chunk, and writes it into MongoDB's `case_law_documents` collection, then builds the Atlas Search vector index. It checks the MongoDB connection first and fails immediately with a clear error if step 1/2 isn't set up correctly, rather than after downloading anything. This step downloads a non-trivial amount of data and can take a while — it only needs to be re-run when you want to refresh the dataset (re-running is safe: each dataset's old documents are only replaced once its download succeeds).
+
+### 6. Run the API
 ```bash
 uvicorn app:app --port 8000 --host 0.0.0.0
 ```
+On startup the app re-validates the MongoDB connection and creates its regular indexes (`services/db.py`'s `ensure_connection()` / `ensure_indexes()`).
 
-### Auth flow
-
-Register (or log in) to get a JWT, then send it as `Authorization: Bearer <token>` on every query/chat-history call.
-
+### 7. Verify it works
 ```bash
 curl -X POST "http://localhost:8000/auth/register" \
   -H "Content-Type: application/json" \
   -d '{"email": "jane@example.com", "password": "hunter2", "full_name": "Jane Doe"}'
 ```
+Take the `access_token` from the response and use it in the `Querying` example under [Usage](#usage) below. A `200` with an `answer` means the whole chain (MongoDB → Atlas Search → Ollama) is working end to end.
 
-This returns `{"access_token": "...", "token_type": "bearer", "user": {...}}`. Subsequent logins use `POST /auth/login` with `{"email", "password"}`. `POST /auth/logout` revokes the current token server-side; `POST /auth/forgot-password` / `POST /auth/reset-password` cover password recovery. Full request/response shapes for all six auth endpoints are in `API.md`.
+### Docker
+Once `.env` is set up (steps 1–2 above):
+```bash
+docker build -t nextwork-rag-api .
+docker run -p 8000:8000 --env-file .env nextwork-rag-api
+```
+
+## Usage
+
+Assumes the API is already running and you have an `access_token` (see [Getting Started](#getting-started) above — steps 6–7 cover starting the server and registering). Every call below needs `Authorization: Bearer <access_token>`. Subsequent logins use `POST /auth/login` with `{"email", "password"}`; `POST /auth/logout` revokes the current token server-side; `POST /auth/forgot-password` / `POST /auth/reset-password` cover password recovery. Full request/response shapes for all six auth endpoints are in `API.md`.
 
 ### Querying
 
