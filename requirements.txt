@@ -1,6 +1,7 @@
 pandas
 requests
 fastapi
+pydantic
 uvicorn[standard]
 chromadb
 ollama
