@@ -56,6 +56,19 @@ def load_recent_messages(session_id: ObjectId, limit: int = MAX_HISTORY_TURNS) -
     return list(reversed(messages))
 
 
+def load_history_for_session(user_id: ObjectId, session_id: Optional[str]) -> List[Dict[str, Any]]:
+    """
+    Recent turns for `session_id`, or [] for a brand-new conversation (no
+    session_id yet - there's nothing to load). Deliberately doesn't create a
+    new session as a side effect, so a query that ends up finding no context
+    doesn't leave behind an empty orphan session.
+    """
+    if not session_id:
+        return []
+    session = _get_owned_session(user_id, session_id)
+    return load_recent_messages(session["_id"])
+
+
 def save_message(session_id: ObjectId, user_id: ObjectId, query: str, answer: str, urls: List[str]) -> None:
     now = datetime.now(timezone.utc)
     chat_messages_collection.insert_one({

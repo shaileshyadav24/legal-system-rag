@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from services.api import router
 from services.auth_routes import router as auth_router
 from services.chat_routes import router as chat_router
-from services.db import ensure_connection, ensure_indexes
+from services.db import ensure_connection, ensure_indexes, ensure_vector_search_index
 
 app = FastAPI()
 
@@ -21,6 +21,7 @@ app.add_middleware(
 def on_startup() -> None:
     ensure_connection()
     ensure_indexes()
+    ensure_vector_search_index()
 
 
 app.include_router(router)
