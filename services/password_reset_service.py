@@ -7,6 +7,7 @@ from typing import Optional
 from fastapi import HTTPException, status
 
 from services.db import password_reset_tokens_collection
+from services.email_service import send_password_reset_email
 from services.user_service import get_user_by_email, update_password
 
 RESET_TOKEN_EXPIRE_MINUTES = 30
@@ -22,10 +23,11 @@ def _as_aware(dt: datetime) -> datetime:
 
 def create_reset_token(email: str) -> Optional[str]:
     """
-    Returns the raw one-time reset token if `email` matches a user, else None.
-    Only the token's hash is stored, so this is the only place the raw value
-    is ever available - in production it should be emailed to the user rather
-    than returned to the caller (no email delivery is wired up yet).
+    Emails a one-time reset link to `email` if it matches a user, and returns
+    the raw token (only ever available here - only its hash is stored).
+    Silently no-ops if the email doesn't match any user, so the caller can
+    return the same response either way and avoid leaking which emails are
+    registered.
     """
     user = get_user_by_email(email)
     if user is None:
@@ -38,6 +40,7 @@ def create_reset_token(email: str) -> Optional[str]:
         "expires_at": datetime.now(timezone.utc) + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES),
         "used": False,
     })
+    send_password_reset_email(user["email"], raw_token, RESET_TOKEN_EXPIRE_MINUTES)
     return raw_token
 
 

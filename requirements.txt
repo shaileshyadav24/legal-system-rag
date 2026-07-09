@@ -16,3 +16,4 @@ pymongo
 bcrypt
 pyjwt
 python-dotenv
+resend

@@ -43,17 +43,13 @@ def logout(payload: Dict[str, Any] = Depends(get_token_payload)) -> None:
     revoke_token(payload["jti"], payload["exp"])
 
 
-@router.post("/forgot-password", dependencies=[Depends(rate_limit("forgot-password"))])
-def forgot_password(request: ForgotPasswordRequest) -> Dict[str, Any]:
-    token = create_reset_token(request.email)
-    # Always return the same shape/message regardless of whether the email
-    # matched a user, so the response itself doesn't reveal which emails are
-    # registered. The token is echoed back only because no email delivery is
-    # wired up yet - in production this would be emailed, never returned here.
-    return {
-        "detail": "If an account with that email exists, a password reset token has been generated.",
-        "reset_token": token,
-    }
+@router.post("/forgot-password", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(rate_limit("forgot-password"))])
+def forgot_password(request: ForgotPasswordRequest) -> None:
+    # Always the same response regardless of whether the email matched a user
+    # (create_reset_token no-ops for an unknown email), so the response itself
+    # never reveals which emails are registered. The reset link only ever
+    # reaches the user via the email sent in create_reset_token.
+    create_reset_token(request.email)
 
 
 @router.post(

@@ -80,8 +80,11 @@ Copy `.env.example` to `.env` and fill in:
 - `MONGODB_DB_NAME` — any database name, e.g. `legal_rag` (created automatically on first write)
 - `JWT_SECRET` — any long random string (e.g. `python -c "import secrets; print(secrets.token_hex(32))"`)
 - `JWT_EXPIRE_MINUTES` — how long access tokens stay valid, e.g. `1440` (24h)
+- `RESEND_API_KEY` — API key from [Resend](https://resend.com), used to send forgot-password emails
+- `RESEND_FROM_EMAIL` — sender address; must be on a domain verified in Resend, or use their sandbox sender `onboarding@resend.dev` for local testing (only delivers to your own Resend account email)
+- `PASSWORD_RESET_URL` — base URL of the FE's reset-password page; the emailed link appends `?token=...` to it
 
-All four are required — the app fails fast at startup if any are missing (`services/config.py`).
+All seven are required — the app fails fast at startup if any are missing (`services/config.py`).
 
 ### 3. Install dependencies
 ```bash

@@ -92,25 +92,21 @@ Request body:
 { "email": "user@example.com" }
 ```
 
-Response `200` (always this shape, whether or not the email is registered — avoids leaking which emails have accounts):
-```json
-{
-  "detail": "If an account with that email exists, a password reset token has been generated.",
-  "reset_token": "8WyuTrDrVJEev3-5FL1BHGpdRkyaju39qJEZGUuGJNA"
-}
-```
-
-> **Dev-only note:** no email delivery is wired up on the backend yet, so `reset_token` is a real, usable value in the response right now (it'll be `null` if the email doesn't match an account). Once email sending is added server-side, this field will be removed and the token will only ever reach the user via email — **don't build permanent FE UI that displays `reset_token` to the user**; treat it as a temporary stand-in for local/dev testing only.
+Response: `204 No Content`, always — whether or not the email matches an account, so the response itself never reveals which emails are registered. If it does match, an email is sent (via Resend) with a link to `PASSWORD_RESET_URL?token=<raw_token>` — build your reset-password FE page at that URL, reading `token` from the query string and submitting it to `POST /auth/reset-password`.
 
 The token expires in 30 minutes and is single-use.
 
-Errors: `429` — rate limited (see above).
+Errors:
+- `429` — rate limited (see above)
+- `500` — the reset email failed to send (Resend delivery failure) — only possible when the email did match an account, so a `500` here does confirm the account exists; this is a genuine delivery failure, not something to retry rapidly
+
+The reset token is never returned in the API response — it only ever reaches the user via email.
 
 ### `POST /auth/reset-password`
 
 Request body:
 ```json
-{ "token": "<reset_token from forgot-password>", "new_password": "new-password-value" }
+{ "token": "<token from the emailed reset link's query string>", "new_password": "new-password-value" }
 ```
 
 Response: `204 No Content`.
