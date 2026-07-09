@@ -1,16 +1,43 @@
-"""Request/response models for the query endpoints."""
-from typing import List, Optional
+"""Request/response models for the auth, chat, and query endpoints."""
+from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 
-class HistoryTurn(BaseModel):
-    """One prior question/answer pair from the same chat session."""
-    q: str
-    answer: str
+class UserRegister(BaseModel):
+    email: EmailStr
+    password: str
+    full_name: str
+
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class UserOut(BaseModel):
+    id: str
+    email: str
+    full_name: str
+    role: str
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
 
 
 class QueryRequest(BaseModel):
     query: str
     collection_name: Optional[str] = None
-    history: Optional[List[HistoryTurn]] = None
+    session_id: Optional[str] = None

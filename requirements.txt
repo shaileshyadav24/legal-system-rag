@@ -2,10 +2,18 @@ pandas
 requests
 fastapi
 pydantic
+pydantic[email]
 uvicorn[standard]
+# Kept only for its bundled DefaultEmbeddingFunction (ONNX MiniLM) - no longer
+# used as a vector store; MongoDB Atlas Vector Search replaced it (see services/db.py).
 chromadb
 ollama
 pyarrow
 fastparquet
 build>=1.0.0
 google-genai>=1.0.0
+pymongo
+bcrypt
+pyjwt
+python-dotenv
+resend

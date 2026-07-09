@@ -1,33 +1,21 @@
-"""Retrieves the most relevant chunk of context for a query from ChromaDB."""
+"""Retrieves the most relevant chunk of context for a query via MongoDB Atlas Vector Search."""
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional
 
-import chromadb
 from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 
-chroma = chromadb.PersistentClient(path="./db")
-# Same default embedding function collections were created with in dataset/dataset.py.
-# Kept as one instance and reused so a query is only embedded once, not once per dataset.
+from services.db import VECTOR_INDEX_NAME, documents_collection
+
+# Same default embedding function documents were ingested with in dataset/dataset.py.
+# Kept as one instance and reused so a query is only embedded once.
 default_ef = DefaultEmbeddingFunction()
 
 _URL_PATTERN = re.compile(r"https?://[^\s]+")
 
-
-def _query_one(dataset: str, query_embedding: List[float]) -> Optional[Dict[str, Any]]:
-    """Query a single "<dataset>_docs" collection. Returns None if it doesn't exist or has no match."""
-    try:
-        collection = chroma.get_collection(f"{dataset}_docs")
-        results = collection.query(query_embeddings=[query_embedding], n_results=1)
-    except Exception:
-        return None
-    if not results["documents"] or not results["documents"][0]:
-        return None
-    return {
-        "distance": results["distances"][0][0],
-        "context": results["documents"][0][0],
-        "metadata": results["metadatas"][0][0] if results.get("metadatas") and results["metadatas"][0] else None,
-    }
+# Candidates Atlas scans before ranking. Wider than what the old per-dataset
+# fan-out needed, since one query now has to find the global best match
+# across every dataset in a single pass instead of comparing 11 top-1s.
+_NUM_CANDIDATES = 200
 
 
 def _extract_pdf_links(metadata: Optional[Dict[str, Any]]) -> List[str]:
@@ -45,37 +33,43 @@ def _extract_urls(text: str) -> List[str]:
 
 def query_collections(q: str, collection_name: Optional[str], datasets: List[str]) -> Dict[str, Any]:
     """
-    Find the best-matching context for `q`: either in one named collection, or
-    across all `datasets` queried in parallel, keeping the closest match.
+    Find the best-matching case-law chunk for `q` via a single $vectorSearch
+    aggregation against the consolidated case_law_documents collection,
+    optionally filtered to one dataset.
     """
-    # Embed once and reuse across every collection lookup instead of
-    # re-embedding the same query text once per dataset.
+    if collection_name and collection_name not in datasets:
+        return {"error": f"Collection {collection_name} not found"}
+
     query_embedding = default_ef([q])[0]
 
+    vector_search_stage: Dict[str, Any] = {
+        "index": VECTOR_INDEX_NAME,
+        "path": "embedding",
+        # Cast from numpy.float32 (what DefaultEmbeddingFunction returns) to
+        # native floats - BSON can't encode numpy scalar types.
+        "queryVector": [float(x) for x in query_embedding],
+        "numCandidates": _NUM_CANDIDATES,
+        "limit": 1,
+    }
     if collection_name:
-        match = _query_one(collection_name, query_embedding)
-        if match is None:
-            return {"error": f"Collection {collection_name}_docs not found"}
-        context = match["context"]
-        best_metadata = match["metadata"]
-        pdf_links = _extract_pdf_links(best_metadata)
-    else:
-        context = ""
-        best_metadata = None
-        pdf_links = []
-        best_distance = float("inf")
-        with ThreadPoolExecutor(max_workers=len(datasets)) as executor:
-            futures = [executor.submit(_query_one, dataset, query_embedding) for dataset in datasets]
-            for future in as_completed(futures):
-                match = future.result()
-                if match is not None and match["distance"] < best_distance:
-                    best_distance = match["distance"]
-                    context = match["context"]
-                    best_metadata = match["metadata"]
+        vector_search_stage["filter"] = {"dataset": collection_name}
+
+    pipeline = [
+        {"$vectorSearch": vector_search_stage},
+        {"$project": {"text": 1, "metadata": 1, "_id": 0}},
+    ]
+    results = list(documents_collection.aggregate(pipeline))
+
+    if not results:
+        return {"context": "", "urls": [], "metadata": None, "pdf_links": []}
+
+    best = results[0]
+    context = best["text"]
+    metadata = best.get("metadata")
 
     return {
         "context": context,
-        "urls": _extract_urls(context) if context else [],
-        "metadata": best_metadata,
-        "pdf_links": pdf_links,
+        "urls": _extract_urls(context),
+        "metadata": metadata,
+        "pdf_links": _extract_pdf_links(metadata),
     }

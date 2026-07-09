@@ -31,10 +31,30 @@ _SENTENCE_END = re.compile(r"[.?!\n]")
 # e.g. the "?" or ":" that used to separate it from the real answer.
 _LEADING_JUNK = " \n\"'?.!:,"
 
+# Some models don't just prefix the answer with a label - they open with a
+# whole explanatory sentence first (e.g. "In this passage from a Supreme
+# Court judgment on X, the question is asked and an answer is provided...")
+# before repeating the question/answer structure. None of the label/preamble
+# stripping below catches that, since it only ever looks at the very start of
+# the text. An "Answer:"/"Response:"/"A:" label sitting at the start of its
+# own line is a much stronger signal of where the real answer begins, so it's
+# used to cut away everything before it (preamble sentence, echoed question,
+# and all) regardless of where in the text it appears.
+_ANSWER_LABEL_LINE = re.compile(r"(?im)^[ \t]*(?:response|answer|a)\s*:[ \t]*")
+
+
+def _extract_after_last_labeled_answer(text: str) -> str:
+    matches = list(_ANSWER_LABEL_LINE.finditer(text))
+    if not matches:
+        return text
+    return text[matches[-1].end():]
+
 
 def clean_response(response_text: str, query: str) -> str:
     text = response_text.strip()
     query = query.strip()
+
+    text = _extract_after_last_labeled_answer(text)
 
     # Models sometimes stack several of the above in one response (e.g. a
     # rephrased question in a "Question:" label, followed by an "Answer:"

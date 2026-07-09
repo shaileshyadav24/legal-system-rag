@@ -4,7 +4,8 @@
 # thin match with invented facts, statutes, or case names.
 _GROUNDING_RULES = """- Base your answer only on the context below - never invent facts, statutes, or case names that aren't in it.
 - If the context doesn't contain enough information to answer, say so plainly instead of guessing.
-- Do NOT repeat or restate the question. Start your response immediately with the answer."""
+- Do NOT repeat or restate the question. Start your response immediately with the answer.
+- If a "Previous conversation" section appears below, this question is a follow-up: use it to resolve references like "it", "that", or "this case", and keep your answer consistent with what was already said rather than starting over."""
 
 
 def get_user_prompt(history_context, context, query):
