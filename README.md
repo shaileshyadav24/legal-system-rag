@@ -159,10 +159,18 @@ Once `.env` is set up (steps 1–3 above), each service builds/runs as its own i
 ```bash
 docker build -f apps/auth/Dockerfile -t nextwork-auth-service .
 docker build -f apps/chat/Dockerfile -t nextwork-chat-service .
-docker run -p 8001:8001 --env-file .env nextwork-auth-service
-docker run -p 8000:8000 --env-file .env nextwork-chat-service
+docker run -p 127.0.0.1:8001:8001 --env-file .env nextwork-auth-service
+docker run -p 127.0.0.1:8000:8000 --env-file .env nextwork-chat-service
 ```
-Both images run as a non-root user and expose `GET /health` (liveness - process is up, no DB/Redis check) with a Docker `HEALTHCHECK` already wired to it. Each container runs uvicorn with multiple worker processes (`UVICORN_WORKERS`, defaults to 4 - set it in `.env` to tune to the container's CPU allocation, or leave at the default and scale horizontally with more container replicas instead).
+Both images run as a non-root user and expose `GET /health` (liveness - process is up, no DB/Redis check) with a Docker `HEALTHCHECK` already wired to it. Each container runs uvicorn with multiple worker processes (`UVICORN_WORKERS`, defaults to 4 - set it in `.env` to tune to the container's CPU allocation, or leave at the default and scale horizontally with more container replicas instead). Ports are bound to `127.0.0.1` only - see "Exposing it publicly" below for why.
+
+**Or run the whole stack with Compose** (Redis, Ollama, and both services - MongoDB still has to be a real Atlas cluster, see above):
+```bash
+docker compose up -d --build
+```
+This also pulls `OLLAMA_MODEL` into Ollama automatically (a one-shot `ollama-init` service) and wires `REDIS_URL`/`OLLAMA_HOST` to the containers' in-network hostnames for you - no `.env` edits needed beyond the usual `MONGODB_URI`/`JWT_SECRET`/etc. from steps 1–3. It also binds both services to `127.0.0.1` only, same as the plain `docker run` commands above.
+
+**Exposing it publicly**: neither `docker run` above nor `docker-compose.yml` expose the services beyond `127.0.0.1`, on purpose - `deploy/nginx/legalrag.conf` is a ready-to-use Nginx reverse-proxy config (with Let's Encrypt setup instructions in its header comment) that terminates TLS and proxies `auth.yourdomain.com`/`api.yourdomain.com` to them from there.
 
 ## Usage
 

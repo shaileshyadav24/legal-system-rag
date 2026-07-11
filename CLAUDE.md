@@ -40,9 +40,14 @@ Docker (separate images per service): each runs as a non-root `appuser`, defines
 ```bash
 docker build -f apps/auth/Dockerfile -t nextwork-auth-service .
 docker build -f apps/chat/Dockerfile -t nextwork-chat-service .
-docker run -p 8001:8001 --env-file .env nextwork-auth-service
-docker run -p 8000:8000 --env-file .env nextwork-chat-service
+docker run -p 127.0.0.1:8001:8001 --env-file .env nextwork-auth-service
+docker run -p 127.0.0.1:8000:8000 --env-file .env nextwork-chat-service
 ```
+Ports are bound to `127.0.0.1` only, not the public interface - see `deploy/nginx/legalrag.conf` below for how to expose them.
+
+`docker-compose.yml` runs the whole stack (Redis, Ollama + a one-shot `ollama pull` of `OLLAMA_MODEL`, and both services) with one command - `cp .env.example .env` (fill it in), then `docker compose up -d --build`. It overrides `REDIS_URL`/`OLLAMA_HOST` to the in-network service hostnames itself, regardless of what's in `.env` - `.env`'s own values there are only for running the services directly on a host. MongoDB is intentionally not included in it - point `MONGODB_URI` at a real Atlas cluster (or the local-testing container below, reachable from Compose's network via its container name instead of `localhost`). Like the plain `docker run` commands above, both services are bound to `127.0.0.1` only.
+
+**Exposing it publicly**: `deploy/nginx/legalrag.conf` is a ready-to-use Nginx reverse-proxy config (Let's Encrypt setup instructions in its header comment) that terminates TLS and proxies `auth.yourdomain.com`/`api.yourdomain.com` to the `127.0.0.1` ports above.
 
 **Local testing without a real Atlas cluster**: `mongodb/mongodb-atlas-local` is a Docker image that bundles `mongot`, so `$vectorSearch` works against it — a plain `mongo:7` container cannot run `$vectorSearch` at all (`OperationFailure: $vectorSearch stage is only allowed on MongoDB Atlas`). Run it with `docker run -d -p 27017:27017 mongodb/mongodb-atlas-local`, and connect with `MONGODB_URI=mongodb://localhost:27017/?directConnection=true` (its replica set otherwise advertises an internal container hostname the host can't resolve).
 
