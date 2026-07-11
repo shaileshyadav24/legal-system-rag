@@ -6,9 +6,9 @@ from typing import Optional
 
 from fastapi import HTTPException, status
 
-from services.db import password_reset_tokens_collection
-from services.email_service import send_password_reset_email
-from services.user_service import get_user_by_email, update_password
+from apps.auth.email_service import send_password_reset_email
+from apps.auth.user_service import get_user_by_email, update_password
+from libs.shared.db import password_reset_tokens_collection
 
 RESET_TOKEN_EXPIRE_MINUTES = 30
 

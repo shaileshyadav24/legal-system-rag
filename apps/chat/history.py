@@ -1,4 +1,4 @@
-"""Turns recent chat messages (from services/chat_service.py) into the history block injected into prompts, and into the text retrieval embeds."""
+"""Turns recent chat messages (from apps/chat/chat_service.py) into the history block injected into prompts, and into the text retrieval embeds."""
 from typing import Any, Dict, List
 
 

@@ -3,14 +3,14 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from services.auth import get_current_user
-from services.chat_service import get_or_create_session, load_history_for_session, save_message
-from services.constants import DATASETS
-from services.history import build_history_context, build_search_query
-from services.llm import generate_answer
-from services.models import QueryRequest
-from services.response_utils import clean_response
-from services.retrieval import query_collections
+from apps.chat.chat_service import get_or_create_session, load_history_for_session, save_message
+from apps.chat.constants import DATASETS
+from apps.chat.history import build_history_context, build_search_query
+from apps.chat.llm import generate_answer
+from apps.chat.models import QueryRequest
+from apps.chat.response_utils import clean_response
+from apps.chat.retrieval import query_collections
+from libs.shared.jwt_auth import get_current_user
 
 router = APIRouter()
 

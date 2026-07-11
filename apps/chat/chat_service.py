@@ -6,7 +6,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import HTTPException, status
 
-from services.db import chat_messages_collection, chat_sessions_collection
+from libs.shared.db import chat_messages_collection, chat_sessions_collection
 
 # tinyllama has a small context window - without a cap, the prompt (and
 # generation latency) would grow every turn for a long-running session.

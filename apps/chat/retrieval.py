@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 
-from services.db import VECTOR_INDEX_NAME, documents_collection
+from libs.shared.db import VECTOR_INDEX_NAME, documents_collection
 
 # Same default embedding function documents were ingested with in dataset/dataset.py.
 # Kept as one instance and reused so a query is only embedded once.

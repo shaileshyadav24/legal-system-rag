@@ -1,6 +1,4 @@
-"""Request/response models for the auth, chat, and query endpoints."""
-from typing import Optional
-
+"""Request/response models for the auth service."""
 from pydantic import BaseModel, EmailStr
 
 
@@ -35,9 +33,3 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
-
-
-class QueryRequest(BaseModel):
-    query: str
-    collection_name: Optional[str] = None
-    session_id: Optional[str] = None

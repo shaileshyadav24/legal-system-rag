@@ -1,0 +1,12 @@
+fastapi==0.139.0
+pydantic==2.13.4
+pydantic[email]==2.13.4
+uvicorn[standard]==0.50.0
+pymongo==4.17.0
+redis==8.0.1
+pyjwt==2.13.0
+python-dotenv==1.2.2
+# Kept only for its bundled DefaultEmbeddingFunction (ONNX MiniLM) - no longer
+# used as a vector store; MongoDB Atlas Vector Search replaced it (see libs/shared/db.py).
+chromadb==1.5.9
+ollama==0.6.2
