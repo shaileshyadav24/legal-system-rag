@@ -1,6 +1,6 @@
 # Shared by both roles so grounding behavior never drifts between them - only
 # tone and vocabulary should differ. The model only ever sees one retrieved
-# chunk (see services/retrieval.py), so it must be stopped from padding a
+# chunk (see apps/chat/retrieval.py), so it must be stopped from padding a
 # thin match with invented facts, statutes, or case names.
 _GROUNDING_RULES = """- Base your answer only on the context below - never invent facts, statutes, or case names that aren't in it.
 - If the context doesn't contain enough information to answer, say so plainly instead of guessing.

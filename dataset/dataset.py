@@ -11,11 +11,11 @@ from pymongo.errors import BulkWriteError
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-# Allow `python dataset/dataset.py` to import the `services` package regardless
+# Allow `python dataset/dataset.py` to import the `libs` package regardless
 # of the invoking working directory.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from services.db import documents_collection, ensure_connection, ensure_vector_search_index  # noqa: E402
+from libs.shared.db import documents_collection, ensure_connection, ensure_vector_search_index  # noqa: E402
 
 DATASETS = ["SCC", "FCA", "FC", "TCC", "CMAC", "CHRT", "SST", "RPD", "RAD", "RLLR", "ONCA"]
 
@@ -23,7 +23,7 @@ URL_PREFIX = "https://huggingface.co/datasets/a2aj/canadian-case-law/resolve/mai
 MAX_WORKERS = 6
 BATCH_SIZE = 1000
 
-# Same embedding model retrieval (services/retrieval.py) queries with - must match
+# Same embedding model retrieval (apps/chat/retrieval.py) queries with - must match
 # so ingested vectors and query vectors live in the same embedding space.
 default_ef = DefaultEmbeddingFunction()
 

@@ -1,0 +1,86 @@
+# Runs the whole stack on one host: Redis, Ollama (+ a one-shot pull of
+# OLLAMA_MODEL), and the two FastAPI services. MongoDB is NOT included here -
+# it's expected to be a real Atlas cluster (MONGODB_URI in .env), since
+# $vectorSearch doesn't work against a plain self-hosted mongod anyway.
+#
+# Usage: cp .env.example .env, fill it in, then `docker compose up -d --build`.
+# Requires Docker Compose v2.20+ (for the `service_completed_successfully`
+# dependency condition on ollama-init).
+#
+# REDIS_URL/OLLAMA_HOST below are overridden to the in-network service
+# hostnames regardless of what .env has - .env's own values are for running
+# the services directly on a host (see CLAUDE.md), not through this file.
+
+services:
+  redis:
+    image: redis:7
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # One-shot: pulls OLLAMA_MODEL into the ollama_data volume, then exits.
+  # Idempotent - already-present models are skipped, so this is a fast no-op
+  # on every restart after the first.
+  ollama-init:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama"]
+    command: ["pull", "${OLLAMA_MODEL:-tinyllama}"]
+
+  auth:
+    build:
+      context: .
+      dockerfile: apps/auth/Dockerfile
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8001:8001"
+    restart: unless-stopped
+
+  chat:
+    build:
+      context: .
+      dockerfile: apps/chat/Dockerfile
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      OLLAMA_HOST: http://ollama:11434
+    depends_on:
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  ollama_data:

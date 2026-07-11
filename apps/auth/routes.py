@@ -3,8 +3,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, status
 
-from services.auth import create_access_token, get_current_user, get_token_payload, revoke_token
-from services.models import (
+from apps.auth.models import (
     ForgotPasswordRequest,
     ResetPasswordRequest,
     Token,
@@ -12,9 +11,10 @@ from services.models import (
     UserOut,
     UserRegister,
 )
-from services.password_reset_service import create_reset_token, reset_password
-from services.rate_limit import rate_limit
-from services.user_service import authenticate_user, create_user, to_user_out
+from apps.auth.password_reset_service import create_reset_token, reset_password
+from apps.auth.rate_limit import rate_limit
+from apps.auth.user_service import authenticate_user, create_user, to_user_out
+from libs.shared.jwt_auth import create_access_token, get_current_user, get_token_payload, revoke_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

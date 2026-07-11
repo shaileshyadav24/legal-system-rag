@@ -6,9 +6,9 @@ from bson import ObjectId
 from fastapi import HTTPException, status
 from pymongo.errors import DuplicateKeyError
 
-from services.auth import hash_password, verify_password
-from services.db import users_collection
-from services.models import UserRegister
+from apps.auth.models import UserRegister
+from apps.auth.password_auth import hash_password, verify_password
+from libs.shared.db import users_collection
 
 
 def create_user(request: UserRegister) -> Dict[str, Any]:

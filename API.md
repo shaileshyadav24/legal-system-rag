@@ -1,12 +1,19 @@
 # API Reference
 
-Base URL (local dev): `http://localhost:8000`
+This is split across **two independently running services** that share one database - all endpoints below are reachable at whichever service owns them:
 
-All endpoints are JSON in / JSON out. CORS currently allows all origins (`allow_origins=["*"]` in `app.py`).
+| Service | Base URL (local dev) | Owns |
+|---|---|---|
+| Auth service | `http://localhost:8001` | `/auth/*` |
+| Chat service | `http://localhost:8000` | `/query/*`, `/chat/*` |
 
-## Auth
+All endpoints are JSON in / JSON out. CORS currently allows all origins on both services (`allow_origins=["*"]` in `apps/auth/app.py`/`apps/chat/app.py`).
 
-Auth is JWT-based. `POST /auth/register` and `POST /auth/login` return an `access_token`. Send it on every subsequent request as:
+A JWT issued by the auth service works directly against the chat service — the chat service verifies it independently (shared `JWT_SECRET` + database), no extra step needed.
+
+## Auth (auth service, port 8001)
+
+Auth is JWT-based. `POST /auth/register` and `POST /auth/login` return an `access_token`. Send it on every subsequent request (to either service) as:
 
 ```
 Authorization: Bearer <access_token>
@@ -115,7 +122,7 @@ Errors:
 - `400` — token invalid, expired, or already used
 - `429` — rate limited (see above)
 
-## Chat queries
+## Chat queries (chat service, port 8000)
 
 Both endpoints require `Authorization`. They differ only in answer tone/vocabulary (`/user` = plain language for non-lawyers, `/lawyer` = precise legal terminology) — same request/response shape.
 
@@ -150,7 +157,7 @@ Errors:
 - `204 No Content` — no relevant context was found for the query (empty body — don't try to parse JSON on this status)
 - `500` — the LLM failed to generate a response
 
-## Chat history
+## Chat history (chat service, port 8000)
 
 All require `Authorization` and only ever return/act on sessions owned by the calling user.
 

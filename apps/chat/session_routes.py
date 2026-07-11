@@ -3,8 +3,8 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, status
 
-from services.auth import get_current_user
-from services.chat_service import delete_session, get_session_messages, list_sessions
+from apps.chat.chat_service import delete_session, get_session_messages, list_sessions
+from libs.shared.jwt_auth import get_current_user
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 

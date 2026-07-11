@@ -9,3 +9,6 @@ __pycache__/
 db/
 user_db/
 *.md
+.env
+.env.*
+!.env.example

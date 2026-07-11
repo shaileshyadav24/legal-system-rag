@@ -3,9 +3,18 @@ from pymongo import ASCENDING, MongoClient
 from pymongo.errors import OperationFailure, PyMongoError
 from pymongo.operations import SearchIndexModel
 
-from services.config import MONGODB_DB_NAME, MONGODB_URI
+from libs.shared.config import MONGODB_DB_NAME, MONGODB_URI
 
-client = MongoClient(MONGODB_URI)
+# Explicit timeouts so a network partition to Atlas hangs a request for at
+# most ~10s instead of indefinitely (pymongo's own default has no
+# socketTimeoutMS at all - a socket that goes dead after connecting would
+# otherwise block forever).
+client = MongoClient(
+    MONGODB_URI,
+    serverSelectionTimeoutMS=5000,
+    connectTimeoutMS=5000,
+    socketTimeoutMS=10000,
+)
 db = client[MONGODB_DB_NAME]
 
 
@@ -27,12 +36,10 @@ users_collection = db["users"]
 chat_sessions_collection = db["chat_sessions"]
 chat_messages_collection = db["chat_messages"]
 documents_collection = db["case_law_documents"]
-revoked_tokens_collection = db["revoked_tokens"]
 password_reset_tokens_collection = db["password_reset_tokens"]
-rate_limit_attempts_collection = db["rate_limit_attempts"]
 
 # Name of the Atlas Search vector index on documents_collection.embedding.
-# Must match the index used in services/retrieval.py's $vectorSearch stage.
+# Must match the index used in apps/chat/retrieval.py's $vectorSearch stage.
 VECTOR_INDEX_NAME = "case_law_vector_index"
 
 # Dimensionality of chromadb.utils.embedding_functions.DefaultEmbeddingFunction
@@ -40,22 +47,21 @@ VECTOR_INDEX_NAME = "case_law_vector_index"
 EMBEDDING_DIMENSIONS = 384
 
 
-def ensure_indexes() -> None:
-    """Create the regular (non-vector) indexes needed by the app. Idempotent."""
+def ensure_auth_indexes() -> None:
+    """Indexes for collections the auth service owns. Idempotent."""
     users_collection.create_index("email", unique=True)
+    # TTL index: MongoDB auto-deletes the doc once the stored `expires_at` is
+    # in the past, so reset entries clean themselves up. (Revoked tokens and
+    # rate-limit attempts live in Redis instead - see libs/shared/redis_client.py.)
+    password_reset_tokens_collection.create_index("token_hash", unique=True)
+    password_reset_tokens_collection.create_index("expires_at", expireAfterSeconds=0)
+
+
+def ensure_chat_indexes() -> None:
+    """Indexes for collections the chat/query service owns. Idempotent."""
     chat_sessions_collection.create_index([("user_id", ASCENDING)])
     chat_messages_collection.create_index([("session_id", ASCENDING), ("created_at", ASCENDING)])
     documents_collection.create_index("dataset")
-    revoked_tokens_collection.create_index("jti", unique=True)
-    # TTL indexes: MongoDB auto-deletes the doc once the stored `expires_at`
-    # is in the past, so revoked/reset entries clean themselves up.
-    revoked_tokens_collection.create_index("expires_at", expireAfterSeconds=0)
-    password_reset_tokens_collection.create_index("token_hash", unique=True)
-    password_reset_tokens_collection.create_index("expires_at", expireAfterSeconds=0)
-    rate_limit_attempts_collection.create_index([("identifier", ASCENDING), ("endpoint", ASCENDING)])
-    # TTL: each attempt record expires on its own after the rate-limit window,
-    # so the window "resets" naturally without any separate cleanup logic.
-    rate_limit_attempts_collection.create_index("expires_at", expireAfterSeconds=0)
 
 
 def ensure_vector_search_index() -> None:

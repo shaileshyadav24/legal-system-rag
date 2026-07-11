@@ -1,8 +1,12 @@
 """Sends transactional emails via Resend."""
+import logging
+
 import resend
 from fastapi import HTTPException, status
 
-from services.config import PASSWORD_RESET_URL, RESEND_API_KEY, RESEND_FROM_EMAIL
+from libs.shared.config import PASSWORD_RESET_URL, RESEND_API_KEY, RESEND_FROM_EMAIL
+
+logger = logging.getLogger(__name__)
 
 resend.api_key = RESEND_API_KEY
 
@@ -22,6 +26,7 @@ def send_password_reset_email(to_email: str, reset_token: str, expires_in_minute
             ),
         })
     except resend.exceptions.ResendError as exc:
+        logger.exception("Failed to send password reset email to %s", to_email)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to send password reset email",
